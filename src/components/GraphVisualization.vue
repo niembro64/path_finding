@@ -10,6 +10,18 @@ import * as d3 from 'd3';
 import { NodeState } from '@/types/graph';
 import type { Graph, AlgorithmStep } from '@/types/graph';
 
+// ========== CONFIGURATION VARIABLES ==========
+// Toggle this to show/hide edge weight labels
+const SHOW_EDGE_WEIGHT_LABELS = true;
+
+// Multiplier for edge thickness (INVERTED - high weight = thin line)
+// Edge thickness = (10 / weight) * EDGE_THICKNESS_MULTIPLIER
+// Higher weights = thinner lines (easier/faster paths)
+// Lower weights = thicker lines (harder/slower paths)
+// Default: 1.0, Try: 0.5 (thinner overall), 2.0 (thicker overall)
+const EDGE_THICKNESS_MULTIPLIER = 3.0;
+// ==============================================
+
 const props = defineProps<{
   graph: Graph;
   currentStep: AlgorithmStep | null;
@@ -30,13 +42,16 @@ const nodeStates = computed(() => {
   }
 
   props.graph.nodes.forEach((_, nodeId) => {
-    if (props.currentStep.path.includes(nodeId)) {
+    // Priority order: final path > current node > best path > visited > frontier > unexplored
+    if (props.currentStep?.path.includes(nodeId)) {
       states.set(nodeId, NodeState.PATH);
-    } else if (nodeId === props.currentStep.currentNode) {
+    } else if (nodeId === props.currentStep?.currentNode) {
       states.set(nodeId, NodeState.CURRENT);
-    } else if (props.currentStep.visited.has(nodeId)) {
+    } else if (props.currentStep?.bestPath?.includes(nodeId)) {
+      states.set(nodeId, NodeState.BEST_PATH);
+    } else if (props.currentStep?.visited.has(nodeId)) {
       states.set(nodeId, NodeState.VISITED);
-    } else if (props.currentStep.frontier.has(nodeId)) {
+    } else if (props.currentStep?.frontier.has(nodeId)) {
       states.set(nodeId, NodeState.FRONTIER);
     } else {
       states.set(nodeId, NodeState.UNEXPLORED);
@@ -57,10 +72,19 @@ const getNodeColor = (state: NodeState): string => {
     case NodeState.CURRENT:
       return '#ffca28';
     case NodeState.PATH:
-      return '#ef5350';
+      return '#4caf50'; // Green for final path
+    case NodeState.BEST_PATH:
+      return '#f44336'; // Red for current best path
     default:
       return '#e0e0e0';
   }
+};
+
+// Helper function to calculate edge thickness based on weight
+const calculateEdgeThickness = (weight: number): number => {
+  // Inverted relationship: higher weight = thinner line
+  // Using 10 as a baseline for good visual range
+  return (10 / weight) * EDGE_THICKNESS_MULTIPLIER;
 };
 
 const drawGraph = () => {
@@ -83,10 +107,10 @@ const drawGraph = () => {
       g.attr('transform', event.transform);
     });
 
-  svg.call(zoom);
+  (svg as any).call(zoom);
 
   // Initial zoom out to fit the large graph
-  svg.call(zoom.scaleTo, 0.5);
+  (svg as any).call(zoom.scaleTo, 0.5);
 
   const edges = Array.from(props.graph.edges.values());
   const nodes = Array.from(props.graph.nodes.values());
@@ -98,27 +122,40 @@ const drawGraph = () => {
     .enter()
     .append('line')
     .attr('stroke', '#999')
-    .attr('stroke-width', d => {
-      // Scale stroke width based on weight (weight ranges from 1-10)
-      // Min width: 0.5px for weight 1, Max width: 3px for weight 10
-      return 0.5 + (d.weight - 1) * 0.28;
+    .attr('stroke-width', (d: unknown) => {
+      const edge = d as { weight: number };
+      return calculateEdgeThickness(edge.weight);
     })
     .attr('opacity', 0.6)
-    .attr('x1', d => props.graph.nodes.get(d.source)?.position.x || 0)
-    .attr('y1', d => props.graph.nodes.get(d.source)?.position.y || 0)
-    .attr('x2', d => props.graph.nodes.get(d.target)?.position.x || 0)
-    .attr('y2', d => props.graph.nodes.get(d.target)?.position.y || 0);
+    .attr('x1', (d: unknown) => {
+      const edge = d as { source: string };
+      return props.graph.nodes.get(edge.source)?.position.x || 0;
+    })
+    .attr('y1', (d: unknown) => {
+      const edge = d as { source: string };
+      return props.graph.nodes.get(edge.source)?.position.y || 0;
+    })
+    .attr('x2', (d: unknown) => {
+      const edge = d as { target: string };
+      return props.graph.nodes.get(edge.target)?.position.x || 0;
+    })
+    .attr('y2', (d: unknown) => {
+      const edge = d as { target: string };
+      return props.graph.nodes.get(edge.target)?.position.y || 0;
+    });
 
-  if (props.showWeights) {
+  // Show edge weight labels based on configuration variable
+  if (props.showWeights && SHOW_EDGE_WEIGHT_LABELS) {
     const edgeLabelGroups = g.append('g')
       .attr('class', 'edge-labels')
       .selectAll('g')
       .data(edges)
       .enter()
       .append('g')
-      .attr('transform', d => {
-        const sourceNode = props.graph.nodes.get(d.source);
-        const targetNode = props.graph.nodes.get(d.target);
+      .attr('transform', (d: unknown) => {
+        const edge = d as { source: string; target: string };
+        const sourceNode = props.graph.nodes.get(edge.source);
+        const targetNode = props.graph.nodes.get(edge.target);
         if (!sourceNode || !targetNode) return 'translate(0, 0)';
         const x = (sourceNode.position.x + targetNode.position.x) / 2;
         const y = (sourceNode.position.y + targetNode.position.y) / 2;
@@ -138,7 +175,10 @@ const drawGraph = () => {
       .attr('font-size', '10px')
       .attr('font-weight', 'bold')
       .attr('pointer-events', 'none')
-      .text(d => d.weight.toString());
+      .text((d: unknown) => {
+        const edge = d as { weight: number };
+        return edge.weight.toString();
+      });
   }
 
   const nodeGroups = g.append('g')
@@ -147,15 +187,22 @@ const drawGraph = () => {
     .data(nodes)
     .enter()
     .append('g')
-    .attr('transform', d => `translate(${d.position.x}, ${d.position.y})`);
+    .attr('transform', (d: unknown) => {
+      const node = d as { position: { x: number; y: number } };
+      return `translate(${node.position.x}, ${node.position.y})`;
+    });
 
   const circles = nodeGroups.append('circle')
     .attr('r', 15)
-    .attr('fill', d => getNodeColor(nodeStates.value.get(d.id) || NodeState.UNEXPLORED))
+    .attr('fill', (d: unknown) => {
+      const node = d as { id: string };
+      return getNodeColor(nodeStates.value.get(node.id) || NodeState.UNEXPLORED);
+    })
     .attr('stroke', '#333')
     .attr('stroke-width', 1)
-    .attr('class', d => {
-      const state = nodeStates.value.get(d.id);
+    .attr('class', (d: unknown) => {
+      const node = d as { id: string };
+      const state = nodeStates.value.get(node.id);
       return state === NodeState.CURRENT ? 'pulse-animation' : '';
     })
     .style('cursor', 'pointer')
@@ -182,10 +229,11 @@ const drawGraph = () => {
     .style('font-size', '12px');
 
   nodeGroups
-    .on('mouseover', (event, d) => {
-      const distance = props.currentStep?.distances?.get(d.id);
-      const heuristic = d.heuristic;
-      let text = `Node: ${d.label}`;
+    .on('mouseover', (event: MouseEvent, d: unknown) => {
+      const node = d as { id: string; label: string; heuristic?: number };
+      const distance = props.currentStep?.distances?.get(node.id);
+      const heuristic = node.heuristic;
+      let text = `Node: ${node.label}`;
       if (distance !== undefined && distance !== Infinity) {
         text += `\nDistance: ${distance}`;
       }
@@ -196,7 +244,7 @@ const drawGraph = () => {
         .style('visibility', 'visible')
         .text(text);
     })
-    .on('mousemove', (event) => {
+    .on('mousemove', (event: MouseEvent) => {
       tooltip
         .style('top', (event.pageY - 10) + 'px')
         .style('left', (event.pageX + 10) + 'px');
@@ -216,43 +264,67 @@ const updateNodeColors = () => {
     .selectAll('.nodes circle')
     .transition()
     .duration(300)
-    .attr('fill', (d: any) => {
-      const state = nodeStates.value.get(d.id) || NodeState.UNEXPLORED;
+    .attr('fill', (d: unknown) => {
+      const node = d as { id: string };
+      const state = nodeStates.value.get(node.id) || NodeState.UNEXPLORED;
       return getNodeColor(state);
     })
-    .attr('class', (d: any) => {
-      const state = nodeStates.value.get(d.id);
+    .attr('class', (d: unknown) => {
+      const node = d as { id: string };
+      const state = nodeStates.value.get(node.id);
       return state === NodeState.CURRENT ? 'pulse-animation' : '';
     });
 
-  if (props.currentStep?.path.length) {
-    const pathEdges = new Set<string>();
+  const pathEdges = new Set<string>();
+  const bestPathEdges = new Set<string>();
+
+  // Final path edges (green)
+  if (props.currentStep?.path?.length) {
     for (let i = 0; i < props.currentStep.path.length - 1; i++) {
       const source = props.currentStep.path[i];
       const target = props.currentStep.path[i + 1];
-      pathEdges.add(`${source}-${target}`);
-      pathEdges.add(`${target}-${source}`);
+      if (source && target) {
+        pathEdges.add(`${source}-${target}`);
+        pathEdges.add(`${target}-${source}`);
+      }
     }
-
-    d3.select(svgRef.value)
-      .selectAll('.links line')
-      .transition()
-      .duration(300)
-      .attr('stroke', (d: any) => pathEdges.has(d.id) ? '#f44336' : '#999')
-      .attr('stroke-width', (d: any) => {
-        const baseWidth = 0.5 + (d.weight - 1) * 0.28;
-        return pathEdges.has(d.id) ? baseWidth * 2 : baseWidth;
-      })
-      .attr('opacity', (d: any) => pathEdges.has(d.id) ? 1 : 0.6);
-  } else {
-    d3.select(svgRef.value)
-      .selectAll('.links line')
-      .transition()
-      .duration(300)
-      .attr('stroke', '#999')
-      .attr('stroke-width', (d: any) => 0.5 + (d.weight - 1) * 0.28)
-      .attr('opacity', 0.6);
   }
+
+  // Best path edges (red)
+  if (props.currentStep?.bestPath?.length) {
+    for (let i = 0; i < props.currentStep.bestPath.length - 1; i++) {
+      const source = props.currentStep.bestPath[i];
+      const target = props.currentStep.bestPath[i + 1];
+      if (source && target) {
+        bestPathEdges.add(`${source}-${target}`);
+        bestPathEdges.add(`${target}-${source}`);
+      }
+    }
+  }
+
+  d3.select(svgRef.value)
+    .selectAll('.links line')
+    .transition()
+    .duration(300)
+    .attr('stroke', (d: unknown) => {
+      const edge = d as { id: string };
+      if (pathEdges.has(edge.id)) return '#4caf50'; // Green for final path
+      if (bestPathEdges.has(edge.id)) return '#f44336'; // Red for best path
+      return '#999'; // Default gray
+    })
+    .attr('stroke-width', (d: unknown) => {
+      const edge = d as { id: string; weight: number };
+      const baseWidth = calculateEdgeThickness(edge.weight);
+      if (pathEdges.has(edge.id) || bestPathEdges.has(edge.id)) {
+        return baseWidth * 2;
+      }
+      return baseWidth;
+    })
+    .attr('opacity', (d: unknown) => {
+      const edge = d as { id: string };
+      if (pathEdges.has(edge.id) || bestPathEdges.has(edge.id)) return 1;
+      return 0.6;
+    });
 };
 
 onMounted(() => {

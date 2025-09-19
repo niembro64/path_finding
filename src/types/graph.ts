@@ -28,7 +28,8 @@ export enum NodeState {
   FRONTIER = 'frontier',
   VISITED = 'visited',
   CURRENT = 'current',
-  PATH = 'path'
+  PATH = 'path',
+  BEST_PATH = 'best_path'
 }
 
 export interface NodeVisualState {
@@ -41,6 +42,8 @@ export interface AlgorithmStep {
   frontier: Set<string>;
   visited: Set<string>;
   path: string[];
+  bestPath?: string[];
+  bestCost?: number;
   distances?: Map<string, number>;
   parents?: Map<string, string | null>;
   message: string;

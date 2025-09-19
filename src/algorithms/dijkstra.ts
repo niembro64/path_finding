@@ -57,17 +57,39 @@ export function dijkstra(graph: Graph, start: string, goal: string): AlgorithmRe
 
   while (!pq.isEmpty()) {
     const current = pq.dequeue()!;
-    
+
     if (visited.has(current)) continue;
-    
+
     visited.add(current);
     nodesExpanded++;
+
+    // Build current best path to goal if reachable
+    let bestPath: string[] = [];
+    let bestCost: number | undefined;
+    if (distances.get(goal) !== Infinity && parents.get(goal) !== undefined) {
+      let pathNode: string | null = goal;
+      const tempPath: string[] = [];
+
+      // Reconstruct path from goal back to start
+      while (pathNode !== null) {
+        tempPath.unshift(pathNode);
+        pathNode = parents.get(pathNode) || null;
+      }
+
+      // Only use if we have a complete path from start to goal
+      if (tempPath.length > 1 && tempPath[0] === start && tempPath[tempPath.length - 1] === goal) {
+        bestPath = tempPath;
+        bestCost = distances.get(goal);
+      }
+    }
 
     steps.push({
       currentNode: current,
       frontier: pq.toSet(),
       visited: new Set(visited),
       path: [],
+      bestPath: bestPath.length > 0 ? bestPath : undefined,
+      bestCost,
       distances: new Map(distances),
       parents: new Map(parents),
       message: `Exploring node ${current} with distance ${distances.get(current)}`

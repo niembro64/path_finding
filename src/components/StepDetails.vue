@@ -29,8 +29,18 @@
       </div>
     </div>
 
+    <div class="detail-section" v-if="currentStep?.bestPath?.length">
+      <h4>Current Best Path (Cost: {{ currentStep?.bestCost?.toFixed(2) || 'N/A' }})</h4>
+      <div class="path-display">
+        <span v-for="(node, index) in currentStep.bestPath" :key="index">
+          <span class="node-badge best-path">{{ node }}</span>
+          <span v-if="index < currentStep.bestPath.length - 1" class="path-arrow">→</span>
+        </span>
+      </div>
+    </div>
+
     <div class="detail-section" v-if="currentStep?.path.length">
-      <h4>Current Path</h4>
+      <h4>Final Path</h4>
       <div class="path-display">
         <span v-for="(node, index) in currentStep.path" :key="index">
           <span class="node-badge path">{{ node }}</span>
@@ -117,7 +127,11 @@ defineProps<{
 }
 
 .node-badge.path {
-  background: #ef5350;
+  background: #4caf50;
+}
+
+.node-badge.best-path {
+  background: #f44336;
 }
 
 .empty-message {
