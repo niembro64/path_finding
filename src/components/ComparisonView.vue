@@ -5,18 +5,53 @@
       <button @click="$emit('close')" class="close-btn">✕</button>
     </div>
 
-    <div class="algorithms-selection">
-      <label class="checkbox-label" v-for="algo in algorithmConfigs" :key="algo.type">
-        <input
-          type="checkbox"
-          :checked="selectedAlgorithms.includes(algo.type)"
-          @change="toggleAlgorithm(algo.type)"
-        />
-        {{ algo.name }}
-      </label>
-      <button @click="$emit('run-comparison')" class="run-btn" :disabled="selectedAlgorithms.length < 2">
-        Run Comparison
+    <div class="comparison-controls">
+      <div class="node-selectors">
+        <div class="selector-group">
+          <label>Start Node:</label>
+          <select v-model="startNode" class="node-select">
+            <option v-for="node in availableNodes" :key="node" :value="node">
+              {{ node }}
+            </option>
+          </select>
+        </div>
+
+        <div class="selector-group">
+          <label>Goal Node:</label>
+          <select v-model="goalNode" class="node-select">
+            <option v-for="node in availableNodes" :key="node" :value="node">
+              {{ node }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <button @click="runAllAlgorithms" class="run-btn">
+        {{ results.size > 0 ? 'Run All Again' : 'Run All Algorithms' }}
       </button>
+
+      <div class="speed-control" v-if="results.size > 0">
+        <label>Speed:</label>
+        <input
+          type="range"
+          min="0.25"
+          max="100"
+          step="0.25"
+          :value="speed"
+          @input="$emit('speed-change', Number($event.target.value))"
+          class="speed-slider"
+        />
+        <span>{{ speed }}x</span>
+      </div>
+
+      <div class="playback-controls" v-if="results.size > 0">
+        <button @click="$emit('toggle-play')" class="control-btn">
+          {{ isPlaying ? '⏸️' : '▶️' }}
+        </button>
+        <button @click="$emit('step-backward')" class="control-btn">⏮️</button>
+        <button @click="$emit('step-forward')" class="control-btn">⏭️</button>
+        <button @click="$emit('reset')" class="control-btn">🔄</button>
+      </div>
     </div>
 
     <div class="comparison-grid" v-if="results.size > 0">
@@ -45,29 +80,13 @@
       </div>
     </div>
 
-    <div class="sync-controls" v-if="results.size > 0">
-      <PlaybackControls
-        :current-step="synchronizedStep"
-        :total-steps="maxSteps"
-        :is-playing="isPlaying"
-        :speed="speed"
-        :message="`Synchronized Step ${synchronizedStep + 1} / ${maxSteps}`"
-        @toggle-play="$emit('toggle-play')"
-        @step-forward="$emit('step-forward')"
-        @step-backward="$emit('step-backward')"
-        @reset="$emit('reset')"
-        @seek="$emit('seek', $event)"
-        @speed-change="$emit('speed-change', $event)"
-      />
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import type { Graph, AlgorithmType, AlgorithmResult, AlgorithmConfig, AlgorithmStep } from '@/types/graph';
 import GraphVisualization from './GraphVisualization.vue';
-import PlaybackControls from './PlaybackControls.vue';
 
 const props = defineProps<{
   graph: Graph;
@@ -80,8 +99,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'close': [];
-  'toggle-algorithm': [algorithm: AlgorithmType];
-  'run-comparison': [];
+  'run-comparison': [start: string, goal: string];
   'toggle-play': [];
   'step-forward': [];
   'step-backward': [];
@@ -89,6 +107,13 @@ const emit = defineEmits<{
   'seek': [step: number];
   'speed-change': [speed: number];
 }>();
+
+const startNode = ref('A0-0');
+const goalNode = ref('A14-14');
+
+const availableNodes = computed(() => {
+  return Array.from(props.graph.nodes.keys()).sort();
+});
 
 const algorithmConfigs: AlgorithmConfig[] = [
   { type: 'bfs', name: 'BFS', requiresHeuristic: false, requiresWeights: false },
@@ -106,8 +131,10 @@ const maxSteps = computed(() => {
   return max;
 });
 
-const toggleAlgorithm = (algorithm: AlgorithmType) => {
-  emit('toggle-algorithm', algorithm);
+const runAllAlgorithms = () => {
+  console.log('[ComparisonView] Run All Algorithms clicked!', { start: startNode.value, goal: goalNode.value });
+  emit('run-comparison', startNode.value, goalNode.value);
+  console.log('[ComparisonView] Emitted run-comparison event');
 };
 
 const getAlgorithmName = (type: AlgorithmType): string => {
@@ -122,6 +149,11 @@ const getStepForAlgorithm = (type: AlgorithmType): AlgorithmStep | null => {
   const stepIndex = Math.min(props.synchronizedStep, result.steps.length - 1);
   return result.steps[stepIndex] || null;
 };
+
+onMounted(() => {
+  console.log('[ComparisonView] Component mounted with', props.graph.nodes.size, 'nodes');
+  console.log('[ComparisonView] Available nodes:', availableNodes.value.slice(0, 5), '...');
+});
 </script>
 
 <style scoped>
@@ -195,12 +227,117 @@ const getStepForAlgorithm = (type: AlgorithmType): AlgorithmStep | null => {
   cursor: not-allowed;
 }
 
+.comparison-controls {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.node-selectors {
+  display: flex;
+  gap: 16px;
+}
+
+.selector-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selector-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+}
+
+.node-select {
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  min-width: 80px;
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.speed-control label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+}
+
+.speed-slider {
+  flex: 1;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e0e0e0;
+  border-radius: 2px;
+  outline: none;
+}
+
+.speed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #4caf50;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.speed-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #4caf50;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.speed-control span {
+  font-size: 12px;
+  color: #666;
+  min-width: 30px;
+}
+
+.playback-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.control-btn {
+  padding: 4px 8px;
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.control-btn:hover {
+  background: #e0e0e0;
+}
+
 .comparison-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
-  padding: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 8px;
+  padding: 8px;
   overflow-y: auto;
 }
 
@@ -234,7 +371,7 @@ const getStepForAlgorithm = (type: AlgorithmType): AlgorithmStep | null => {
 }
 
 .mini-graph {
-  height: 300px;
+  height: 200px;
   position: relative;
 }
 

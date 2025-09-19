@@ -2,13 +2,21 @@
   <div class="app">
     <header class="app-header">
       <h1>Interactive Pathfinding Visualization</h1>
-      <button @click="toggleComparisonMode" class="mode-toggle">
-        {{ comparisonMode ? 'Single Mode' : 'Comparison Mode' }}
-      </button>
+      <div class="mode-buttons">
+        <button @click="setViewMode('single')" :class="['mode-toggle', { active: viewMode === 'single' }]">
+          Single Mode
+        </button>
+        <button @click="setViewMode('comparison')" :class="['mode-toggle', { active: viewMode === 'comparison' }]">
+          Comparison Mode
+        </button>
+        <button @click="setViewMode('all')" :class="['mode-toggle', { active: viewMode === 'all' }]">
+          All Algorithms
+        </button>
+      </div>
     </header>
 
     <div class="app-content">
-      <div v-if="!comparisonMode" class="single-mode">
+      <div v-if="viewMode === 'single'" class="single-mode">
         <aside class="sidebar">
           <AlgorithmSelector
             :selected-algorithm="selectedAlgorithm"
@@ -71,7 +79,7 @@
         </main>
       </div>
 
-      <div v-else class="comparison-mode">
+      <div v-else-if="viewMode === 'comparison'" class="comparison-mode">
         <ComparisonView
           :graph="graph"
           :selected-algorithms="comparisonAlgorithms"
@@ -79,15 +87,21 @@
           :synchronized-step="synchronizedStep"
           :is-playing="isPlaying"
           :speed="playbackSpeed"
-          @close="toggleComparisonMode"
-          @toggle-algorithm="toggleComparisonAlgorithm"
-          @run-comparison="runComparison"
+          @close="() => setViewMode('single')"
+          @run-comparison="(start, goal) => runComparison(start, goal)"
           @toggle-play="togglePlay"
           @step-forward="stepForwardComparison"
           @step-backward="stepBackwardComparison"
           @reset="resetComparison"
           @seek="seekComparison"
           @speed-change="playbackSpeed = $event"
+        />
+      </div>
+
+      <div v-else-if="viewMode === 'all'" class="all-algorithms-mode">
+        <AllAlgorithmsView
+          :graph="graph"
+          @close="() => setViewMode('single')"
         />
       </div>
     </div>
@@ -104,6 +118,7 @@ import AlgorithmSelector from '@/components/AlgorithmSelector.vue';
 import PlaybackControls from '@/components/PlaybackControls.vue';
 import ComparisonView from '@/components/ComparisonView.vue';
 import StepDetails from '@/components/StepDetails.vue';
+import AllAlgorithmsView from '@/components/AllAlgorithmsView.vue';
 
 const graph = ref<Graph>(generateSampleGraph());
 const selectedAlgorithm = ref<AlgorithmType | null>(null);
@@ -115,8 +130,8 @@ const showWeights = ref(true);
 const startNode = ref('A0-0');
 const goalNode = ref('A14-14');
 
-const comparisonMode = ref(false);
-const comparisonAlgorithms = ref<AlgorithmType[]>([]);
+const viewMode = ref<'single' | 'comparison' | 'all'>('comparison');
+const comparisonAlgorithms = ref<AlgorithmType[]>(['bfs', 'dfs', 'dijkstra', 'astar', 'greedy']);
 const comparisonResults = ref<Map<AlgorithmType, AlgorithmResult>>(new Map());
 const synchronizedStep = ref(0);
 
@@ -169,11 +184,19 @@ const togglePlay = () => {
 };
 
 const startPlayback = () => {
-  if (!currentResult.value) return;
+  if (viewMode.value === 'comparison' && comparisonResults.value.size === 0) {
+    console.log('[App] Cannot start playback - no comparison results');
+    return;
+  }
+  if (viewMode.value !== 'comparison' && !currentResult.value) {
+    console.log('[App] Cannot start playback - no current result');
+    return;
+  }
 
+  console.log(`[App] Starting playback at ${playbackSpeed.value}x speed for ${viewMode.value} mode`);
   isPlaying.value = true;
   playbackInterval = window.setInterval(() => {
-    if (comparisonMode.value) {
+    if (viewMode.value === 'comparison') {
       stepForwardComparison();
     } else {
       stepForward();
@@ -215,13 +238,16 @@ const seek = (step: number) => {
   currentStepIndex.value = Math.max(0, Math.min(step, currentResult.value.steps.length - 1));
 };
 
-const toggleComparisonMode = () => {
-  comparisonMode.value = !comparisonMode.value;
+const setViewMode = (mode: 'single' | 'comparison' | 'all') => {
+  viewMode.value = mode;
   stopPlayback();
-  if (!comparisonMode.value) {
+  if (mode === 'single') {
     comparisonAlgorithms.value = [];
     comparisonResults.value.clear();
     synchronizedStep.value = 0;
+  } else if (mode === 'comparison') {
+    // Auto-select all algorithms for comparison mode
+    comparisonAlgorithms.value = ['bfs', 'dfs', 'dijkstra', 'astar', 'greedy'];
   }
 };
 
@@ -235,14 +261,42 @@ const toggleComparisonAlgorithm = (algorithm: AlgorithmType) => {
   }
 };
 
-const runComparison = () => {
+const runComparison = (start?: string, goal?: string) => {
+  console.log('[App] Starting runComparison...', { start, goal });
+
+  // Update start and goal nodes if provided
+  if (start) startNode.value = start;
+  if (goal) goalNode.value = goal;
+
+  console.log('[App] Using nodes:', { start: startNode.value, goal: goalNode.value });
+  console.log('[App] Graph has', graph.value.nodes.size, 'nodes and', graph.value.edges.size, 'edges');
+
   comparisonResults.value.clear();
+  const startTime = performance.now();
+
   comparisonAlgorithms.value.forEach(algo => {
+    const algoStartTime = performance.now();
+    console.log(`[App] Running ${algo} algorithm...`);
+
     const result = runAlgorithm(algo, graph.value, startNode.value, goalNode.value);
+
+    const algoEndTime = performance.now();
+    console.log(`[App] ${algo} completed in ${(algoEndTime - algoStartTime).toFixed(2)}ms - ${result.steps.length} steps, cost: ${result.totalCost}`);
+
     comparisonResults.value.set(algo, result);
   });
+
+  const endTime = performance.now();
+  console.log(`[App] All algorithms completed in ${(endTime - startTime).toFixed(2)}ms`);
+
   synchronizedStep.value = 0;
   stopPlayback();
+
+  // Auto-start playback for comparison mode
+  if (comparisonResults.value.size > 0) {
+    console.log('[App] Starting playback with', comparisonResults.value.size, 'results');
+    startPlayback();
+  }
 };
 
 const stepForwardComparison = () => {
@@ -250,10 +304,12 @@ const stepForwardComparison = () => {
   comparisonResults.value.forEach(result => {
     maxSteps = Math.max(maxSteps, result.steps.length);
   });
-  
+
   if (synchronizedStep.value < maxSteps - 1) {
     synchronizedStep.value++;
+    console.log(`[App] Stepped to ${synchronizedStep.value + 1}/${maxSteps}`);
   } else {
+    console.log('[App] Reached end of comparison playback');
     stopPlayback();
   }
 };
@@ -313,19 +369,30 @@ onUnmounted(() => {
   color: #333;
 }
 
+.mode-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .mode-toggle {
   padding: 8px 16px;
-  background: #2196f3;
-  color: white;
-  border: none;
+  background: #f0f0f0;
+  color: #333;
+  border: 2px solid #e0e0e0;
   border-radius: 4px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .mode-toggle:hover {
-  background: #1976d2;
+  background: #e0e0e0;
+}
+
+.mode-toggle.active {
+  background: #2196f3;
+  color: white;
+  border-color: #2196f3;
 }
 
 .app-content {
@@ -404,5 +471,9 @@ onUnmounted(() => {
 .comparison-mode {
   height: 100%;
   padding: 16px;
+}
+
+.all-algorithms-mode {
+  height: 100%;
 }
 </style>

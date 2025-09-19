@@ -103,6 +103,9 @@ const calculateEdgeThickness = (weight: number): number => {
 const drawGraph = () => {
   if (!svgRef.value || !containerRef.value) return;
 
+  const drawStartTime = performance.now();
+  console.log('[GraphViz] Starting drawGraph...');
+
   const width = containerRef.value.clientWidth;
   const height = containerRef.value.clientHeight;
 
@@ -122,8 +125,8 @@ const drawGraph = () => {
 
   (svg as any).call(zoom);
 
-  // Initial zoom out to fit the large graph
-  (svg as any).call(zoom.scaleTo, 0.5);
+  // Initial zoom out to fit the large graph - extra zoom out for comparison view
+  (svg as any).call(zoom.scaleTo, 0.15);
 
   const edges = Array.from(props.graph.edges.values());
   const nodes = Array.from(props.graph.nodes.values());
@@ -266,12 +269,17 @@ const drawGraph = () => {
       tooltip.style('visibility', 'hidden');
     });
 
+  const drawEndTime = performance.now();
+  console.log(`[GraphViz] drawGraph completed in ${(drawEndTime - drawStartTime).toFixed(2)}ms`);
+
   // Ensure colors are updated after drawing
   setTimeout(() => updateNodeColors(), 50);
 };
 
 const updateNodeColors = () => {
   if (!svgRef.value) return;
+
+  const updateStartTime = performance.now();
 
   d3.select(svgRef.value)
     .selectAll('.nodes circle')
@@ -339,6 +347,9 @@ const updateNodeColors = () => {
       if (pathEdges.has(edge.id) || bestPathEdges.has(edge.id)) return 1;
       return 0.6;
     });
+
+  const updateEndTime = performance.now();
+  console.log(`[GraphViz] updateNodeColors completed in ${(updateEndTime - updateStartTime).toFixed(2)}ms`);
 };
 
 onMounted(() => {
