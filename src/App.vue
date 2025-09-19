@@ -95,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted, watch } from 'vue';
 import type { Graph, AlgorithmType, AlgorithmResult, AlgorithmStep } from '@/types/graph';
 import { generateSampleGraph } from '@/utils/graphGenerator';
 import { runAlgorithm } from '@/algorithms';
@@ -276,6 +276,14 @@ const seekComparison = (step: number) => {
   });
   synchronizedStep.value = Math.max(0, Math.min(step, maxSteps - 1));
 };
+
+// Watch for speed changes and restart playback if needed
+watch(playbackSpeed, () => {
+  if (isPlaying.value) {
+    stopPlayback();
+    startPlayback();
+  }
+});
 
 onUnmounted(() => {
   stopPlayback();

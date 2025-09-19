@@ -127,7 +127,7 @@ defineProps<{
 }
 
 .node-badge.path {
-  background: #4caf50;
+  background: #f44336;
 }
 
 .node-badge.best-path {

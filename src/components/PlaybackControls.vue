@@ -49,7 +49,7 @@
       <input
         type="range"
         min="0.25"
-        max="3"
+        max="100"
         step="0.25"
         :value="speed"
         @input="$emit('speed-change', Number(($event.target as HTMLInputElement).value))"

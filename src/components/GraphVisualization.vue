@@ -33,7 +33,7 @@ const svgRef = ref<SVGElement>();
 
 const nodeStates = computed(() => {
   const states = new Map<string, NodeState>();
-  
+
   if (!props.currentStep) {
     props.graph.nodes.forEach((_, nodeId) => {
       states.set(nodeId, NodeState.UNEXPLORED);
@@ -41,22 +41,35 @@ const nodeStates = computed(() => {
     return states;
   }
 
+  // Debug logging
+  if (props.currentStep?.bestPath?.length) {
+    console.log(`[GraphViz] Current step has best path: ${props.currentStep.bestPath.join(' → ')} (Cost: ${props.currentStep.bestCost})`);
+  }
+
+  let bestPathCount = 0;
+
   props.graph.nodes.forEach((_, nodeId) => {
     // Priority order: final path > current node > best path > visited > frontier > unexplored
-    if (props.currentStep?.path.includes(nodeId)) {
+    if (props.currentStep?.path?.length && props.currentStep.path.includes(nodeId)) {
       states.set(nodeId, NodeState.PATH);
     } else if (nodeId === props.currentStep?.currentNode) {
       states.set(nodeId, NodeState.CURRENT);
     } else if (props.currentStep?.bestPath?.includes(nodeId)) {
       states.set(nodeId, NodeState.BEST_PATH);
-    } else if (props.currentStep?.visited.has(nodeId)) {
+      bestPathCount++;
+      console.log(`[GraphViz] Setting node ${nodeId} to BEST_PATH`);
+    } else if (props.currentStep?.visited?.has(nodeId)) {
       states.set(nodeId, NodeState.VISITED);
-    } else if (props.currentStep?.frontier.has(nodeId)) {
+    } else if (props.currentStep?.frontier?.has(nodeId)) {
       states.set(nodeId, NodeState.FRONTIER);
     } else {
       states.set(nodeId, NodeState.UNEXPLORED);
     }
   });
+
+  if (bestPathCount > 0) {
+    console.log(`[GraphViz] Total nodes set to BEST_PATH: ${bestPathCount}`);
+  }
 
   return states;
 });
@@ -72,7 +85,7 @@ const getNodeColor = (state: NodeState): string => {
     case NodeState.CURRENT:
       return '#ffca28';
     case NodeState.PATH:
-      return '#4caf50'; // Green for final path
+      return '#f44336'; // Red for final path
     case NodeState.BEST_PATH:
       return '#f44336'; // Red for current best path
     default:
@@ -292,14 +305,19 @@ const updateNodeColors = () => {
 
   // Best path edges (red)
   if (props.currentStep?.bestPath?.length) {
+    console.log(`[GraphViz] Processing best path edges for: ${props.currentStep.bestPath.join(' → ')}`);
     for (let i = 0; i < props.currentStep.bestPath.length - 1; i++) {
       const source = props.currentStep.bestPath[i];
       const target = props.currentStep.bestPath[i + 1];
       if (source && target) {
-        bestPathEdges.add(`${source}-${target}`);
-        bestPathEdges.add(`${target}-${source}`);
+        const edgeId = `${source}-${target}`;
+        const reverseEdgeId = `${target}-${source}`;
+        bestPathEdges.add(edgeId);
+        bestPathEdges.add(reverseEdgeId);
+        console.log(`[GraphViz] Added best path edge: ${edgeId}`);
       }
     }
+    console.log(`[GraphViz] Total best path edges: ${bestPathEdges.size}`);
   }
 
   d3.select(svgRef.value)
@@ -308,17 +326,13 @@ const updateNodeColors = () => {
     .duration(300)
     .attr('stroke', (d: unknown) => {
       const edge = d as { id: string };
-      if (pathEdges.has(edge.id)) return '#4caf50'; // Green for final path
+      if (pathEdges.has(edge.id)) return '#f44336'; // Red for final path
       if (bestPathEdges.has(edge.id)) return '#f44336'; // Red for best path
       return '#999'; // Default gray
     })
     .attr('stroke-width', (d: unknown) => {
       const edge = d as { id: string; weight: number };
-      const baseWidth = calculateEdgeThickness(edge.weight);
-      if (pathEdges.has(edge.id) || bestPathEdges.has(edge.id)) {
-        return baseWidth * 2;
-      }
-      return baseWidth;
+      return calculateEdgeThickness(edge.weight);
     })
     .attr('opacity', (d: unknown) => {
       const edge = d as { id: string };

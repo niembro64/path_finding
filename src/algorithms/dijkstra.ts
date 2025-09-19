@@ -54,6 +54,7 @@ export function dijkstra(graph: Graph, start: string, goal: string): AlgorithmRe
 
   let nodesExpanded = 0;
   let found = false;
+  let goalFirstReached = false;
 
   while (!pq.isEmpty()) {
     const current = pq.dequeue()!;
@@ -63,10 +64,16 @@ export function dijkstra(graph: Graph, start: string, goal: string): AlgorithmRe
     visited.add(current);
     nodesExpanded++;
 
-    // Build current best path to goal if reachable
+    // Check if we've reached the goal for the first time
+    if (current === goal && !goalFirstReached) {
+      goalFirstReached = true;
+    }
+
+    // Build current best path to goal if we've reached it at least once
     let bestPath: string[] = [];
     let bestCost: number | undefined;
-    if (distances.get(goal) !== Infinity && parents.get(goal) !== undefined) {
+
+    if (goalFirstReached && distances.get(goal) !== Infinity && parents.get(goal) !== undefined) {
       let pathNode: string | null = goal;
       const tempPath: string[] = [];
 
@@ -80,6 +87,7 @@ export function dijkstra(graph: Graph, start: string, goal: string): AlgorithmRe
       if (tempPath.length > 1 && tempPath[0] === start && tempPath[tempPath.length - 1] === goal) {
         bestPath = tempPath;
         bestCost = distances.get(goal);
+        console.log(`[Dijkstra] Best path updated: ${bestPath.join(' → ')} (Cost: ${bestCost})`);
       }
     }
 
