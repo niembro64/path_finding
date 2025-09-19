@@ -98,36 +98,45 @@ const drawGraph = () => {
     .enter()
     .append('line')
     .attr('stroke', '#999')
-    .attr('stroke-width', 1)
+    .attr('stroke-width', d => {
+      // Scale stroke width based on weight (weight ranges from 1-10)
+      // Min width: 0.5px for weight 1, Max width: 3px for weight 10
+      return 0.5 + (d.weight - 1) * 0.28;
+    })
+    .attr('opacity', 0.6)
     .attr('x1', d => props.graph.nodes.get(d.source)?.position.x || 0)
     .attr('y1', d => props.graph.nodes.get(d.source)?.position.y || 0)
     .attr('x2', d => props.graph.nodes.get(d.target)?.position.x || 0)
     .attr('y2', d => props.graph.nodes.get(d.target)?.position.y || 0);
 
   if (props.showWeights) {
-    const edgeLabels = g.append('g')
+    const edgeLabelGroups = g.append('g')
       .attr('class', 'edge-labels')
-      .selectAll('text')
+      .selectAll('g')
       .data(edges)
       .enter()
-      .append('text')
-      .attr('x', d => {
+      .append('g')
+      .attr('transform', d => {
         const sourceNode = props.graph.nodes.get(d.source);
         const targetNode = props.graph.nodes.get(d.target);
-        if (!sourceNode || !targetNode) return 0;
-        return (sourceNode.position.x + targetNode.position.x) / 2;
-      })
-      .attr('y', d => {
-        const sourceNode = props.graph.nodes.get(d.source);
-        const targetNode = props.graph.nodes.get(d.target);
-        if (!sourceNode || !targetNode) return 0;
-        return (sourceNode.position.y + targetNode.position.y) / 2;
-      })
+        if (!sourceNode || !targetNode) return 'translate(0, 0)';
+        const x = (sourceNode.position.x + targetNode.position.x) / 2;
+        const y = (sourceNode.position.y + targetNode.position.y) / 2;
+        return `translate(${x}, ${y})`;
+      });
+
+    // Add white background circle for better readability
+    edgeLabelGroups.append('circle')
+      .attr('r', 8)
+      .attr('fill', 'white')
+      .attr('opacity', 0.9);
+
+    edgeLabelGroups.append('text')
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'middle')
-      .attr('fill', '#666')
-      .attr('font-size', '8px')
-      .attr('font-weight', 'normal')
+      .attr('fill', '#333')
+      .attr('font-size', '10px')
+      .attr('font-weight', 'bold')
       .attr('pointer-events', 'none')
       .text(d => d.weight.toString());
   }
@@ -230,14 +239,19 @@ const updateNodeColors = () => {
       .transition()
       .duration(300)
       .attr('stroke', (d: any) => pathEdges.has(d.id) ? '#f44336' : '#999')
-      .attr('stroke-width', (d: any) => pathEdges.has(d.id) ? 4 : 2);
+      .attr('stroke-width', (d: any) => {
+        const baseWidth = 0.5 + (d.weight - 1) * 0.28;
+        return pathEdges.has(d.id) ? baseWidth * 2 : baseWidth;
+      })
+      .attr('opacity', (d: any) => pathEdges.has(d.id) ? 1 : 0.6);
   } else {
     d3.select(svgRef.value)
       .selectAll('.links line')
       .transition()
       .duration(300)
       .attr('stroke', '#999')
-      .attr('stroke-width', 2);
+      .attr('stroke-width', (d: any) => 0.5 + (d.weight - 1) * 0.28)
+      .attr('opacity', 0.6);
   }
 };
 
