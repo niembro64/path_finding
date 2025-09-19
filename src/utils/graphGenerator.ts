@@ -53,46 +53,65 @@ export function addEdge(graph: Graph, source: string, target: string, weight: nu
 export function generateSampleGraph(): Graph {
   const graph = createGraph();
 
-  const positions: Record<string, Position> = {
-    'A': { x: 100, y: 100 },
-    'B': { x: 250, y: 50 },
-    'C': { x: 400, y: 100 },
-    'D': { x: 550, y: 150 },
-    'E': { x: 100, y: 250 },
-    'F': { x: 250, y: 200 },
-    'G': { x: 400, y: 250 },
-    'H': { x: 550, y: 300 },
-    'I': { x: 250, y: 350 },
-    'J': { x: 400, y: 400 }
-  };
+  // Create a much larger grid-based graph
+  const rows = 15; // 15x15 grid = 225 nodes
+  const cols = 15;
+  const spacing = 60;
+  const startX = 50;
+  const startY = 50;
 
-  Object.entries(positions).forEach(([id, pos]) => {
-    addNode(graph, id, pos);
-  });
+  // Generate nodes in a grid pattern
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const nodeId = `${String.fromCharCode(65 + Math.floor(row / 26))}${row % 26}-${col}`;
+      const position: Position = {
+        x: startX + col * spacing,
+        y: startY + row * spacing
+      };
+      addNode(graph, nodeId, position, nodeId);
+    }
+  }
 
-  const edges: Array<[string, string, number]> = [
-    ['A', 'B', 4],
-    ['A', 'E', 3],
-    ['B', 'C', 5],
-    ['B', 'F', 2],
-    ['C', 'D', 6],
-    ['C', 'G', 4],
-    ['D', 'H', 3],
-    ['E', 'F', 3],
-    ['E', 'I', 5],
-    ['F', 'G', 3],
-    ['F', 'I', 4],
-    ['G', 'H', 4],
-    ['G', 'J', 3],
-    ['H', 'J', 5],
-    ['I', 'J', 4]
-  ];
+  // Connect nodes in grid pattern with some randomization
+  const nodeIds = Array.from(graph.nodes.keys());
 
-  edges.forEach(([source, target, weight]) => {
-    addEdge(graph, source, target, weight, true);
-  });
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const currentId = `${String.fromCharCode(65 + Math.floor(row / 26))}${row % 26}-${col}`;
 
-  const goalNode = graph.nodes.get('J');
+      // Connect to right neighbor
+      if (col < cols - 1) {
+        const rightId = `${String.fromCharCode(65 + Math.floor(row / 26))}${row % 26}-${col + 1}`;
+        const weight = Math.floor(Math.random() * 9) + 1; // Random weight 1-9
+        addEdge(graph, currentId, rightId, weight, true);
+      }
+
+      // Connect to bottom neighbor
+      if (row < rows - 1) {
+        const bottomId = `${String.fromCharCode(65 + Math.floor((row + 1) / 26))}${(row + 1) % 26}-${col}`;
+        const weight = Math.floor(Math.random() * 9) + 1;
+        addEdge(graph, currentId, bottomId, weight, true);
+      }
+
+      // Add diagonal connections with 30% probability for more interesting paths
+      if (row < rows - 1 && col < cols - 1 && Math.random() < 0.3) {
+        const diagonalId = `${String.fromCharCode(65 + Math.floor((row + 1) / 26))}${(row + 1) % 26}-${col + 1}`;
+        const weight = Math.floor(Math.random() * 9) + 2; // Slightly higher weight for diagonals
+        addEdge(graph, currentId, diagonalId, weight, true);
+      }
+
+      // Add other diagonal with 30% probability
+      if (row < rows - 1 && col > 0 && Math.random() < 0.3) {
+        const diagonalId = `${String.fromCharCode(65 + Math.floor((row + 1) / 26))}${(row + 1) % 26}-${col - 1}`;
+        const weight = Math.floor(Math.random() * 9) + 2;
+        addEdge(graph, currentId, diagonalId, weight, true);
+      }
+    }
+  }
+
+  // Set heuristics for A* and Greedy (using bottom-right corner as default goal)
+  const goalId = `${String.fromCharCode(65 + Math.floor((rows - 1) / 26))}${(rows - 1) % 26}-${cols - 1}`;
+  const goalNode = graph.nodes.get(goalId);
   if (goalNode) {
     graph.nodes.forEach((node) => {
       const dx = goalNode.position.x - node.position.x;

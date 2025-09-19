@@ -7,7 +7,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue';
 import * as d3 from 'd3';
-import type { Graph, NodeState, AlgorithmStep } from '@/types/graph';
+import { NodeState } from '@/types/graph';
+import type { Graph, AlgorithmStep } from '@/types/graph';
 
 const props = defineProps<{
   graph: Graph;
@@ -50,13 +51,13 @@ const getNodeColor = (state: NodeState): string => {
     case NodeState.UNEXPLORED:
       return '#e0e0e0';
     case NodeState.FRONTIER:
-      return '#2196f3';
+      return '#42a5f5';
     case NodeState.VISITED:
-      return '#4caf50';
+      return '#66bb6a';
     case NodeState.CURRENT:
-      return '#ffc107';
+      return '#ffca28';
     case NodeState.PATH:
-      return '#f44336';
+      return '#ef5350';
     default:
       return '#e0e0e0';
   }
@@ -77,12 +78,15 @@ const drawGraph = () => {
   const g = svg.append('g');
 
   const zoom = d3.zoom<SVGSVGElement, unknown>()
-    .scaleExtent([0.5, 3])
+    .scaleExtent([0.1, 5])
     .on('zoom', (event) => {
       g.attr('transform', event.transform);
     });
 
   svg.call(zoom);
+
+  // Initial zoom out to fit the large graph
+  svg.call(zoom.scaleTo, 0.5);
 
   const edges = Array.from(props.graph.edges.values());
   const nodes = Array.from(props.graph.nodes.values());
@@ -94,7 +98,7 @@ const drawGraph = () => {
     .enter()
     .append('line')
     .attr('stroke', '#999')
-    .attr('stroke-width', 2)
+    .attr('stroke-width', 1)
     .attr('x1', d => props.graph.nodes.get(d.source)?.position.x || 0)
     .attr('y1', d => props.graph.nodes.get(d.source)?.position.y || 0)
     .attr('x2', d => props.graph.nodes.get(d.target)?.position.x || 0)
@@ -122,8 +126,8 @@ const drawGraph = () => {
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'middle')
       .attr('fill', '#666')
-      .attr('font-size', '12px')
-      .attr('font-weight', 'bold')
+      .attr('font-size', '8px')
+      .attr('font-weight', 'normal')
       .attr('pointer-events', 'none')
       .text(d => d.weight.toString());
   }
@@ -137,20 +141,26 @@ const drawGraph = () => {
     .attr('transform', d => `translate(${d.position.x}, ${d.position.y})`);
 
   const circles = nodeGroups.append('circle')
-    .attr('r', 25)
+    .attr('r', 15)
     .attr('fill', d => getNodeColor(nodeStates.value.get(d.id) || NodeState.UNEXPLORED))
     .attr('stroke', '#333')
-    .attr('stroke-width', 2)
-    .style('cursor', 'pointer');
+    .attr('stroke-width', 1)
+    .attr('class', d => {
+      const state = nodeStates.value.get(d.id);
+      return state === NodeState.CURRENT ? 'pulse-animation' : '';
+    })
+    .style('cursor', 'pointer')
+    .style('transition', 'fill 0.3s ease');
 
-  const labels = nodeGroups.append('text')
-    .attr('text-anchor', 'middle')
-    .attr('dominant-baseline', 'middle')
-    .attr('fill', 'white')
-    .attr('font-weight', 'bold')
-    .attr('font-size', '16px')
-    .attr('pointer-events', 'none')
-    .text(d => d.label);
+  // Don't show labels for large graphs - too cluttered
+  // const labels = nodeGroups.append('text')
+  //   .attr('text-anchor', 'middle')
+  //   .attr('dominant-baseline', 'middle')
+  //   .attr('fill', 'white')
+  //   .attr('font-weight', 'bold')
+  //   .attr('font-size', '8px')
+  //   .attr('pointer-events', 'none')
+  //   .text(d => d.label);
 
   const tooltip = d3.select('body').append('div')
     .attr('class', 'tooltip')
@@ -186,7 +196,8 @@ const drawGraph = () => {
       tooltip.style('visibility', 'hidden');
     });
 
-  updateNodeColors();
+  // Ensure colors are updated after drawing
+  setTimeout(() => updateNodeColors(), 50);
 };
 
 const updateNodeColors = () => {
@@ -196,7 +207,14 @@ const updateNodeColors = () => {
     .selectAll('.nodes circle')
     .transition()
     .duration(300)
-    .attr('fill', (d: any) => getNodeColor(nodeStates.value.get(d.id) || NodeState.UNEXPLORED));
+    .attr('fill', (d: any) => {
+      const state = nodeStates.value.get(d.id) || NodeState.UNEXPLORED;
+      return getNodeColor(state);
+    })
+    .attr('class', (d: any) => {
+      const state = nodeStates.value.get(d.id);
+      return state === NodeState.CURRENT ? 'pulse-animation' : '';
+    });
 
   if (props.currentStep?.path.length) {
     const pathEdges = new Set<string>();
@@ -230,7 +248,7 @@ onMounted(() => {
 
 watch(() => props.currentStep, () => {
   updateNodeColors();
-}, { deep: true });
+}, { deep: true, immediate: true });
 
 watch(() => props.graph, () => {
   drawGraph();
@@ -254,5 +272,25 @@ watch(() => props.showWeights, () => {
 svg {
   width: 100%;
   height: 100%;
+}
+
+@keyframes pulse {
+  0% {
+    stroke-width: 2;
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-width: 6;
+    stroke-opacity: 0.7;
+  }
+  100% {
+    stroke-width: 2;
+    stroke-opacity: 1;
+  }
+}
+
+:global(.pulse-animation) {
+  animation: pulse 1.5s ease-in-out infinite;
+  stroke: #ff9800 !important;
 }
 </style>

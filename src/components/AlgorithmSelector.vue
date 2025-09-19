@@ -39,6 +39,14 @@
         Show Edge Weights
       </label>
     </div>
+
+    <button 
+      @click="$emit('run-algorithm')" 
+      class="run-algorithm-btn"
+      :disabled="!selectedAlgorithm"
+    >
+      {{ selectedAlgorithm ? 'Run Algorithm' : 'Select an Algorithm' }}
+    </button>
   </div>
 </template>
 
@@ -58,6 +66,7 @@ const emit = defineEmits<{
   'select': [algorithm: AlgorithmType];
   'update-nodes': [start: string, goal: string];
   'toggle-weights': [show: boolean];
+  'run-algorithm': [];
 }>();
 
 const algorithmConfigs: AlgorithmConfig[] = [
@@ -179,5 +188,27 @@ h3 {
   width: 16px;
   height: 16px;
   cursor: pointer;
+}
+
+.run-algorithm-btn {
+  width: 100%;
+  padding: 12px;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.run-algorithm-btn:hover:not(:disabled) {
+  background: #45a049;
+}
+
+.run-algorithm-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
 </style>

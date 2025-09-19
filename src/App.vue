@@ -19,6 +19,7 @@
             @select="selectAlgorithm"
             @update-nodes="updateNodes"
             @toggle-weights="showWeights = $event"
+            @run-algorithm="runSelectedAlgorithm"
           />
 
           <div v-if="currentResult" class="statistics">
@@ -36,6 +37,11 @@
               <span class="stat-value">{{ currentResult.nodesExpanded }}</span>
             </div>
           </div>
+
+          <StepDetails
+            v-if="currentResult"
+            :current-step="currentStep"
+          />
         </aside>
 
         <main class="main-content">
@@ -97,6 +103,7 @@ import GraphVisualization from '@/components/GraphVisualization.vue';
 import AlgorithmSelector from '@/components/AlgorithmSelector.vue';
 import PlaybackControls from '@/components/PlaybackControls.vue';
 import ComparisonView from '@/components/ComparisonView.vue';
+import StepDetails from '@/components/StepDetails.vue';
 
 const graph = ref<Graph>(generateSampleGraph());
 const selectedAlgorithm = ref<AlgorithmType | null>(null);
@@ -105,8 +112,8 @@ const currentStepIndex = ref(0);
 const isPlaying = ref(false);
 const playbackSpeed = ref(1);
 const showWeights = ref(true);
-const startNode = ref('A');
-const goalNode = ref('J');
+const startNode = ref('A0-0');
+const goalNode = ref('A14-14');
 
 const comparisonMode = ref(false);
 const comparisonAlgorithms = ref<AlgorithmType[]>([]);
@@ -128,20 +135,16 @@ const currentStep = computed<AlgorithmStep | null>(() => {
 
 const selectAlgorithm = (algorithm: AlgorithmType) => {
   selectedAlgorithm.value = algorithm;
-  runSelectedAlgorithm();
 };
 
 const updateNodes = (start: string, goal: string) => {
   startNode.value = start;
   goalNode.value = goal;
-  if (selectedAlgorithm.value) {
-    runSelectedAlgorithm();
-  }
 };
 
 const runSelectedAlgorithm = () => {
   if (!selectedAlgorithm.value) return;
-  
+
   currentResult.value = runAlgorithm(
     selectedAlgorithm.value,
     graph.value,
@@ -150,6 +153,11 @@ const runSelectedAlgorithm = () => {
   );
   currentStepIndex.value = 0;
   stopPlayback();
+
+  // Automatically start playing through the steps
+  if (currentResult.value && currentResult.value.steps.length > 0) {
+    startPlayback();
+  }
 };
 
 const togglePlay = () => {
@@ -162,7 +170,7 @@ const togglePlay = () => {
 
 const startPlayback = () => {
   if (!currentResult.value) return;
-  
+
   isPlaying.value = true;
   playbackInterval = window.setInterval(() => {
     if (comparisonMode.value) {
@@ -170,7 +178,7 @@ const startPlayback = () => {
     } else {
       stepForward();
     }
-  }, 500 / playbackSpeed.value);
+  }, 1000 / playbackSpeed.value);
 };
 
 const stopPlayback = () => {
@@ -325,10 +333,12 @@ onUnmounted(() => {
 }
 
 .sidebar {
-  width: 300px;
+  width: 320px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
+  max-height: calc(100vh - 100px);
 }
 
 .main-content {
